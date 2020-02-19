@@ -1,0 +1,224 @@
+---
+title: "PRACTICUM IN DATA ANALYSIS -- Data visualization"
+output: html_document
+---
+
+#### Overview    
+    
+This visulation can be divided into four parts: the relationship between timely response rate and narratives length; the word usage in narratives; timely response rate according to product; the complaints distribution for EQUIFAX, INC.   
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(tm)
+```
+```{r}
+library(tidytext)
+library(wordcloud)
+library(RXKCD)
+library(RColorBrewer)
+```
+```{r}
+library(ggplot2)
+library(stringr)
+library(maps)
+library(maptools)
+library(mapproj)
+```
+
+```{r, cache=TRUE}
+d <- read.csv('D:complaints.csv')
+```
+
+```{r}
+#subset data to those having narratives
+data <- d[d$Consumer.complaint.narrative != '', ]
+```
+
+```{r}
+library(caret)
+```
+
+#### 1. The relationship between timely response rate and narratives length    
+      
+In this section, I use subset of dataset to investigate whether the length of complaint affects the chance of timely response.   
+According to below plot, my preliminary conclusion is that the length of complaint narratives would not significant affect the probability of being timely responsed.   
+
+```{r}
+sampling <- createDataPartition(y = data$Product, p = 0.025, list = FALSE) 
+sample <- data[sampling, ]
+```
+
+```{r}
+myCorpus <- Corpus(VectorSource(as.character(sample$Consumer.complaint.narrative))) 
+```
+
+```{r}
+#remove stopwords and meaningless xs
+cleancor <- tm_map(myCorpus, removeWords, stopwords("english")) 
+cleancor <- tm_map(cleancor, removeWords, c('xxxx', 'xxxxxxxx'))
+```
+
+```{r}
+cleantext <- data.frame(text = sapply(cleancor, as.character), stringsAsFactors = FALSE)
+```
+
+```{r}
+len_s <- sapply(gregexpr("\\S+", cleantext$text), length)
+```
+
+```{r}
+sample$len_s <- len_s
+s3 <- sample %>%　group_by(len_s) %>%
+  summarize(y = sum(Timely.response.=="Yes"), n = sum(Timely.response.=="No"))
+```
+
+```{r}
+# Calculate timey response rate for each narrative length
+s3$pro <- s3$n/(s3$y + s3$n)
+```
+
+```{r}
+ggplot(s3) +
+  geom_point(aes(x = len_s, y = pro)) +
+  geom_smooth(aes(x = len_s, y = pro), method = "lm") +
+  labs(y = "timey response rate", x = "length of narratives")
+```
+
+
+
+
+#### 2. The word usage in narratives    
+    
+In this section, I use wordclud to explore whether those complaints that get timely response use different word from those ignored complaints. My first plot show the word usage for timely responsed complaints and the second show the word usage for neglected complaints. The results show that the word 'credit' outstands in the ignored complaints but not timely responsed complaints. This may suggests that issues about credit service tend to need more time to process.
+```{r}
+#split sample into two group according to timely response variable
+sample_have <- sample %>% filter(Timely.response. == 'Yes')
+sample_no <- sample %>% filter(Timely.response. == 'No')
+```
+
+```{r}
+corpushave <- Corpus(VectorSource(as.character(sample_have$Consumer.complaint.narrative))) 
+```
+
+```{r}
+corpushave <- tm_map(corpushave, content_transformer(tolower))
+corpushave <- tm_map(corpushave, stripWhitespace) 
+corpushave <- tm_map(corpushave, removePunctuation)
+corpushave <- tm_map(corpushave, removeNumbers)
+corpushave <- tm_map(corpushave, removeWords, stopwords("english")) 
+corpushave <- tm_map(corpushave, removeWords, c('xxxx', 'xxxxxxxx'))
+```
+
+```{r}
+tdmhave <- TermDocumentMatrix(corpushave)
+mhave <- as.matrix(tdmhave)
+vhave <- sort(rowSums(mhave),decreasing=TRUE)
+dhave <- data.frame(word = names(vhave),freq=vhave)
+```
+
+```{r, warning = FALSE}
+wordcloud(dhave$word, dhave$freq, scale=c(8,.3),min.freq=10,max.words=100, random.order=T, rot.per=.15,  vfont=c("sans serif","plain"))
+```
+```{r}
+corpusno <- Corpus(VectorSource(as.character(sample_no$Consumer.complaint.narrative))) 
+```
+
+```{r}
+corpusno <- tm_map(corpusno, content_transformer(tolower))
+corpusno <- tm_map(corpusno, stripWhitespace) 
+corpusno <- tm_map(corpusno, removePunctuation)
+corpusno <- tm_map(corpusno, removeNumbers)
+corpusno <- tm_map(corpusno, removeWords, stopwords("english")) 
+corpusno <- tm_map(corpusno, removeWords, c('xxxx', 'xxxxxxxx'))
+```
+
+```{r}
+tdmno <- TermDocumentMatrix(corpusno)
+mno <- as.matrix(tdmno)
+vno <- sort(rowSums(mno),decreasing=TRUE)
+dno <- data.frame(word = names(vno),freq=vno)
+```
+
+```{r, warning = FALSE}
+set.seed(3921)
+wordcloud(dno$word, dno$freq, scale=c(8,.3),min.freq=1,max.words=100, random.order=T, rot.per=.15, vfont=c("sans serif","plain"))
+```
+
+#### 3. Timely response rate according to product     
+     
+In this section, I investigate the timely response rate for each product.    
+According to results, despite most products have timely response rate over 0.9, the response rate for other financial service and payday loan are lowest, only have 0.75 and 0.86 respectively. For other financial service, I consider the delayed response may due to unclear category. For payday loan, I found the response rate for product type 'Payday loan, title loan, or personal loan' are higher than rate of product type 'Payday loan'. The difference between these two categories need further exploration.    
+```{r}
+dproduct <- sample %>% select(Product, Timely.response.) %>%
+  group_by(Product) %>%
+  summarise(rate = sum(Timely.response.=="Yes")/n(), std = sd(Timely.response.=="Yes"))
+```
+```{r}
+print(dproduct)
+```
+
+```{r, warning = FALSE}
+ggplot(data = dproduct, aes(x = factor(Product), y = rate)) +
+  geom_bar(stat = "identity", color="black", position = position_dodge()) +
+  geom_errorbar(ymin = dproduct$rate + dproduct$std, ymax = dproduct$rate - dproduct$std, width = 0.2) +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  theme(panel.grid.major.y = element_blank()) +
+  theme(panel.grid.minor.y = element_blank()) +
+  theme(panel.grid.major.x = element_blank()) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 8)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10))+
+  labs(x = "Product", y = "Timely response rate") +
+  ggtitle("Timely response rate according to Product type") 
+```
+
+#### 4. The complaints distribution for EQUIFAX, INC
+     
+After observing the full dataset, I found that company EQUIFAX, INC. receives most complaints. Therefore in this section, I want to explore the complaints distribution across US.  
+In this section, I continuously use the sample of subset that have narratives. I assume that data with narratives are not statistically different from those without narratives, with ground from last semester results.
+With heatmap, I find that most complaints come from Calafornia and Florida to EQUIFAX, INC. This preliminary suggests that company should focus more on these two states. However, whether these two states really have inferior customer service need further investigation. For example, we can calculate the complaint rate dividing complaint number by total user in that state and examine whether the complaint rate are higher in particular state. Nevertheless, the results suggests that Calafornia and Florida clearly needs more stuff to handle complaints.    
+```{r}
+d %>% group_by(Company) %>%
+  summarise(freq = n()) %>%
+  arrange(desc(freq)) %>%
+  head()
+```
+
+```{r}
+scompany <- sample %>% filter(Company == "EQUIFAX, INC.") %>% 
+  group_by(State) %>%
+  summarise(n = n()) 
+```
+
+```{r}
+scompany$region <- tolower(state.name[match(scompany$State,  state.abb)])
+```
+
+
+```{r}
+states <- map_data("state")
+map.df <- merge(states,scompany, by="region", all.x=T)
+map.df <- map.df[order(map.df$order),]
+```
+
+```{r}
+map <- states %>% group_by(region) %>%
+  summarise(longitude = mean(long), latitude = mean(lat))
+```
+
+
+```{r}
+ggplot(map.df, aes(x=long,y=lat,group=group))+
+  geom_polygon(aes(fill=map.df$n))+
+  geom_path()+ 
+  geom_text(data=map, aes(x=longitude,y=latitude, group=NA, label=region), 
+            size=2.5, vjust=0.5, hjust=0.5)+
+  scale_fill_gradientn(colours=rev(heat.colors(10)),na.value="grey90")+
+  coord_map()
+```
+
