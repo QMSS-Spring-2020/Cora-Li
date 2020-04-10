@@ -47,6 +47,12 @@ library(caret)
       
 In this section, I use subset of dataset to investigate whether the length of complaint affects the chance of timely response.   
 According to below plot, my preliminary conclusion is that the length of complaint narratives would not significant affect the probability of being timely responsed.   
+```{r}
+no <- filter(data, Timely.response. == "No")
+```
+```{r}
+write.csv(no, "no.csv")
+```
 
 ```{r}
 sampling <- createDataPartition(y = data$Product, p = 0.025, list = FALSE) 
