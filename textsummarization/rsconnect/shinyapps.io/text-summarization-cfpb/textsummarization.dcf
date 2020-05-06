@@ -1,0 +1,12 @@
+name: textsummarization
+title: textsummarization
+username:
+account: text-summarization-cfpb
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2217609
+bundleId: 3086171
+url: https://text-summarization-cfpb.shinyapps.io/textsummarization/
+when: 1588256775.71438
+asMultiple: FALSE
+asStatic: FALSE
